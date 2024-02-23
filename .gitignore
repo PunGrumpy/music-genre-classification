@@ -1,2 +1,5 @@
 # Dataset (unzip)
 audio-features-and-lyrics-of-spotify-songs/
+
+# Cache
+__pycache__/
