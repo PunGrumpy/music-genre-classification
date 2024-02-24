@@ -14,6 +14,14 @@ import matplotlib.pyplot as plt
 from torch.utils.data import Dataset
 
 
+def _batch_to_tensor(batch):
+    index, _X, target_id, target_label = zip(*batch)
+    return (
+        torch.LongTensor(np.array(_X)),
+        torch.LongTensor(np.array(target_id)).squeeze(),
+    )
+
+
 class MusicGenreDatasetWithPreprocess(Dataset):
     def __init__(
         self,
@@ -34,8 +42,13 @@ class MusicGenreDatasetWithPreprocess(Dataset):
 
         if self.input_type == "unclean":
             self.nlp = spacy.load(
-                "en_core_web_sm", disable=["tagger", "parser", "ner", "lemmatizer"]
-            )  # Load spacy model (excluding tagger, parser, ner, and lemmatizer)
+                "en_core_web_sm",
+                disable=[
+                    "tagger",
+                    "parser",
+                    "ner",
+                ],  # if disable "lemmatizer" it not work on tagging IDs on lyrics
+            )
 
         if self.emb_type == "bert":
             self.func_w2i = self._bert_w2id
@@ -55,15 +68,11 @@ class MusicGenreDatasetWithPreprocess(Dataset):
 
             if self.input_type == "unclean":
                 print("Preprocessing and tokenizing input data...")
-                X = [
-                    self.preprocess(self.nlp, lyric) for lyric in data["lyrics"].values
-                ]
+                X = [self.preprocess(self.nlp, lyric) for lyric in data.lyrics.values]
                 print("Convert tokenized to IDs...")
                 X = [self.func_w2i(token_list) for token_list in X]
             elif self.input_type == "clean":
-                print("Tokenizing input data...")
-                X = [lyric.split() for lyric in data["lyrics"].values]
-                print("Convert tokenized to IDs...")
+                X = [lyric.split() for lyric in data.lyrics.values]
                 X = [self.func_w2i(token_list) for token_list in X]
             else:
                 sys.exit(f"Unrecognized input type: {self.input_type}")
@@ -81,12 +90,10 @@ class MusicGenreDatasetWithPreprocess(Dataset):
 
             tmp = pd.DataFrame(
                 {
-                    "lyrics": [
-                        " ".join([str(index) for index in id_list]) for id_list in X
-                    ],
+                    "lyrics": [" ".join([str(word) for word in lyric]) for lyric in X],
                     "_lyrics": data["lyrics"].values,
-                    "genre": data["playlist_genre"].values,
-                    "genre_id": data["playlist_genre_id"].values,
+                    "playlist_genre": data["playlist_genre"].values,
+                    "playlist_genre_id": data["playlist_genre_id"].values,
                     "acousticness": data["acousticness"].values,
                 }
             )
@@ -139,17 +146,20 @@ class MusicGenreDatasetWithPreprocess(Dataset):
             _X,
             self.y_id[index],
             self.y_label[index],
-            self.acousticness[index],
+            # self.acousticness[index],
         )
 
     def _bert_w2id(self, tokens):
         ids = [self.emb_model.encode(token)[0] for token in tokens]
         return ids
 
-    def preprocess(self, nlp, text):
+    @staticmethod
+    def preprocess(nlp, text):
+        """returns a list of preprocessed tokens (tokens are strings/words)"""
         doc = nlp(text)
-        return [
-            token.text.lower()
+        out = [
+            token.lemma_.lower()
             for token in doc
             if not token.is_stop and token.lemma_.isalpha()
         ]
+        return out
