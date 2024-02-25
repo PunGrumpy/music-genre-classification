@@ -68,7 +68,7 @@ class MusicGenreDatasetWithPreprocess(Dataset):
         """Length of the dataset"""
         return len(self.X)
 
-    def __iter__(self):
+    def __iter__(self) -> any:
         """Iterate over the dataset"""
         for index in range(len(self)):
             yield self[index]
