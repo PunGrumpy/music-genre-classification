@@ -1,5 +1,4 @@
 import os
-import sys
 import spacy
 import torch
 import numpy as np
@@ -14,6 +13,51 @@ class InputType:
     INDEX = "index"
 
 
+class MusicGenreDataset(Dataset):
+    def __init__(self, path_data: str, max_seq_length: int = 250):
+        self.max_seq_length = max_seq_length
+        self.audio_features = [
+            "danceability",
+            "energy",
+            "key",
+            "loudness",
+            "speechiness",
+            "acousticness",
+            "instrumentalness",
+            "liveness",
+            "valence",
+            "tempo",
+        ]
+
+        self.X, self.y_label, self.y_id, self.y_audio = self._load_data(path_data)
+
+    def __len__(self) -> int:
+        return len(self.X)
+
+    def __iter__(self) -> any:
+        for index in range(len(self)):
+            yield self[index]
+
+    def __getitem__(self, index) -> tuple:
+        _X = np.zeros(self.max_seq_length, dtype=np.int64)
+        item = self.X[index]
+        return (
+            torch.tensor(item, dtype=torch.float32),
+            torch.tensor(self.y_id[index], dtype=torch.int64),
+            torch.tensor(self.y_audio[index], dtype=torch.float32),
+        )
+
+    def _load_data(self, path_data: str) -> pd.DataFrame:
+        data = pd.read_csv(path_data, index_col=0)
+        X = [lyrics.split() for lyrics in data["lyrics"].values]
+        return (
+            X,
+            data["playlist_genre"],
+            data["playlist_genre_id"],
+            data[self.audio_features],
+        )
+
+
 class MusicGenreDatasetWithPreprocess(Dataset):
     def __init__(
         self,
@@ -25,17 +69,6 @@ class MusicGenreDatasetWithPreprocess(Dataset):
         store_processed: bool = True,
         output_dir: str = "",
     ):
-        """Music Genre Dataset with Preprocessing
-
-        Args:
-            path_data (str): Path to the dataset
-            embedder_model (str): Model name for the embedder
-            embedder_type (str): Type of embedder
-            input_type (str): Type of input
-            max_seq_length (int, optional): Maximum sequence length. Defaults to 250.
-            store_processed (bool, optional): Store the processed data. Defaults to True.
-            output_dir (str, optional): Output directory. Defaults to "".
-        """
         self.input_type = input_type
         self.embedder_model = embedder_model
         self.embedder_type = embedder_type
@@ -43,7 +76,6 @@ class MusicGenreDatasetWithPreprocess(Dataset):
         self.store_processed = store_processed
         self.output_dir = os.path.abspath(output_dir)
         self.nlp = spacy.load("en_core_web_sm", disable=["parser", "ner"])
-        self.genre_features = ["playlist_genre", "playlist_genre_id"]
         self.audio_features = [
             "danceability",
             "energy",
@@ -59,22 +91,21 @@ class MusicGenreDatasetWithPreprocess(Dataset):
 
         if self.embedder_type == "bert":
             self.func_w2v = self._bert_w2v
+        elif self.embedder_type == "gensim":
+            self.func_w2v = self._gensim_w2v
         else:
-            sys.exit(f"Embedder type {self.embedder_type} not supported")
+            raise ValueError(f"Unsupported embedder type: {self.embedder_type}")
 
         self.X, self.y_label, self.y_id, self.y_audio = self._load_data(path_data)
 
     def __len__(self) -> int:
-        """Length of the dataset"""
         return len(self.X)
 
     def __iter__(self) -> any:
-        """Iterate over the dataset"""
         for index in range(len(self)):
             yield self[index]
 
     def __getitem__(self, index) -> tuple:
-        """Get item"""
         _X = np.zeros(self.max_seq_length, dtype=np.int64)
         item = self.X[index]
 
@@ -88,7 +119,6 @@ class MusicGenreDatasetWithPreprocess(Dataset):
         )
 
     def _process_item(self, item) -> list:
-        """Process item based on input type"""
         if self.input_type == InputType.UNCLEAN:
             item = self.preprocess(self.nlp, " ".join(item))
             item = self.func_w2v(item)
@@ -97,18 +127,21 @@ class MusicGenreDatasetWithPreprocess(Dataset):
         elif self.input_type == InputType.INDEX:
             pass
         else:
-            sys.exit(f"Input type {self.input_type} not supported")
+            raise ValueError(f"Unsupported input type: {self.input_type}")
 
         return item
 
     def _load_data(self, path_data: str) -> pd.DataFrame:
-        """Load and preprocess data"""
         data = pd.read_csv(path_data, index_col=0)
 
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
+
+        print(
+            f"Store processed data is activated. Saving processed data to {os.path.abspath(self.output_dir)} ..."
+        )
+
         if self.store_processed and self.input_type != InputType.INDEX:
-            print(
-                f"Store processed data is activated. Saving processed data to {self.output_dir.split('/')[-2]}/{self.output_dir.split('/')[-1]} ..."
-            )
             X, y_label, y_id, y_audio = self._process_data(data)
             path_processed = os.path.join(
                 self.output_dir,
@@ -120,9 +153,8 @@ class MusicGenreDatasetWithPreprocess(Dataset):
                 {
                     "lyrics": [" ".join(map(str, lyrics)) for lyrics in X.values],
                     "_lyrics": data["lyrics"].values,
-                    **{
-                        feature: data[feature].values for feature in self.genre_features
-                    },
+                    "playlist_genre": data["playlist_genre"].values,
+                    "playlist_genre_id": data["playlist_genre_id"].values,
                     **{
                         feature: data[feature].values for feature in self.audio_features
                     },
@@ -135,7 +167,6 @@ class MusicGenreDatasetWithPreprocess(Dataset):
         return X, y_label, y_id, y_audio
 
     def _process_data(self, data: pd.DataFrame) -> tuple:
-        """Process data based on input type"""
         if self.input_type == InputType.UNCLEAN:
             X = [self.preprocess(self.nlp, lyrics) for lyrics in data["lyrics"].values]
             X = [self.func_w2v(tokens) for tokens in X]
@@ -150,17 +181,16 @@ class MusicGenreDatasetWithPreprocess(Dataset):
                 for lyrics in data["lyrics"].values
             ]
         else:
-            sys.exit(f"Input type {self.input_type} not supported")
+            raise ValueError(f"Unsupported input type: {self.input_type}")
 
         return (
             X,
-            data[self.genre_features],
+            data["playlist_genre"],
             data["playlist_genre_id"],
             data[self.audio_features],
         )
 
     def _load_raw_data(self, data: pd.DataFrame) -> tuple:
-        """Load raw data based on input type"""
         if self.input_type == InputType.INDEX:
             X = [
                 [int(word) for word in lyrics.split()]
@@ -171,24 +201,23 @@ class MusicGenreDatasetWithPreprocess(Dataset):
 
         return (
             X,
-            data[self.genre_features],
+            data["playlist_genre"],
             data["playlist_genre_id"],
             data[self.audio_features],
         )
 
     def _bert_w2v(self, tokens: list) -> list:
-        """BERT word embeddings"""
         return [self.embedder_model.encode(token) for token in tokens]
+
+    def _gensim_w2v(self, tokens: list) -> list:
+        return [
+            self.embedder_model[token]
+            for token in tokens
+            if token in self.embedder_model
+        ]
 
     @staticmethod
     def preprocess(nlp, text: str) -> list:
-        """Preprocess text using spaCy.
-
-        This method takes raw text as input and performs the following preprocessing steps:
-        - Lemmatization: reducing words to their base or root form
-        - Lowercasing: converting all characters to lowercase
-        - Stop words removal: eliminating common words that usually don't contribute much to the meaning
-        """
         doc = nlp(text)
         out = [
             token.lemma_.lower()
