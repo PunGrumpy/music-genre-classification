@@ -107,7 +107,7 @@ class MusicGenreDatasetWithPreprocess(Dataset):
 
         if self.store_processed and self.input_type != InputType.INDEX:
             print(
-                f"Store processed data is activated. Saving processed data to {self.output_dir} ..."
+                f"Store processed data is activated. Saving processed data to {self.output_dir.split('/')[-2]}/{self.output_dir.split('/')[-1]} ..."
             )
             X, y_label, y_id, y_audio = self._process_data(data)
             path_processed = os.path.join(
