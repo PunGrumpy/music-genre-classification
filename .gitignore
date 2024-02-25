@@ -3,3 +3,6 @@ audio-features-and-lyrics-of-spotify-songs/
 
 # Cache
 __pycache__/
+
+# Large files
+data/W2V/
