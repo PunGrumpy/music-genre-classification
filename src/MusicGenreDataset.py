@@ -7,6 +7,21 @@ from datetime import datetime
 from torch.utils.data import Dataset
 
 
+AUDIO_FEATURES = [
+    "danceability",
+    "energy",
+    "key",
+    "loudness",
+    "mode",
+    "speechiness",
+    "acousticness",
+    "instrumentalness",
+    "liveness",
+    "valence",
+    "tempo",
+]
+
+
 class InputType:
     UNCLEAN = "unclean"
     CLEAN = "clean"
@@ -16,18 +31,6 @@ class InputType:
 class MusicGenreDataset(Dataset):
     def __init__(self, path_data: str, max_seq_length: int = 250):
         self.max_seq_length = max_seq_length
-        self.audio_features = [
-            "danceability",
-            "energy",
-            "key",
-            "loudness",
-            "speechiness",
-            "acousticness",
-            "instrumentalness",
-            "liveness",
-            "valence",
-            "tempo",
-        ]
         self.X, self.X_audio, self.y_label, self.y_id = self._load_data(path_data)
 
     def __len__(self) -> int:
@@ -51,26 +54,13 @@ class MusicGenreDataset(Dataset):
         X = [lyrics.split() for lyrics in data["lyrics"].values]
         return (
             X,
-            data[self.audio_features],
+            data[AUDIO_FEATURES],
             data["playlist_genre"],
             data["playlist_genre_id"],
         )
 
 
 class MusicGenreDatasetWithPreprocess(Dataset):
-    AUDIO_FEATURES = [
-        "danceability",
-        "energy",
-        "key",
-        "loudness",
-        "speechiness",
-        "acousticness",
-        "instrumentalness",
-        "liveness",
-        "valence",
-        "tempo",
-    ]
-
     def __init__(
         self,
         path_data: str,
@@ -148,9 +138,7 @@ class MusicGenreDatasetWithPreprocess(Dataset):
                 {
                     "lyrics": [" ".join(map(str, lyrics)) for lyrics in X.values],
                     "_lyrics": data["lyrics"].values,
-                    **{
-                        feature: data[feature].values for feature in self.AUDIO_FEATURES
-                    },
+                    **{feature: data[feature].values for feature in AUDIO_FEATURES},
                     "playlist_genre": data["playlist_genre"].values,
                     "playlist_genre_id": data["playlist_genre_id"].values,
                 }
@@ -180,7 +168,7 @@ class MusicGenreDatasetWithPreprocess(Dataset):
 
         return (
             X,
-            data[self.AUDIO_FEATURES],
+            data[AUDIO_FEATURES],
             data["playlist_genre"],
             data["playlist_genre_id"],
         )
@@ -196,7 +184,7 @@ class MusicGenreDatasetWithPreprocess(Dataset):
 
         return (
             X,
-            data[self.AUDIO_FEATURES],
+            data[AUDIO_FEATURES],
             data["playlist_genre"],
             data["playlist_genre_id"],
         )
