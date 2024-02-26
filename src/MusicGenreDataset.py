@@ -142,7 +142,7 @@ class MusicGenreDatasetWithPreprocess(Dataset):
         )
 
         if self.store_processed and self.input_type != InputType.INDEX:
-            X, y_label, y_id, y_audio = self._process_data(data)
+            X, X_audio, y_label, y_id = self._process_data(data)
             path_processed = os.path.join(
                 self.output_dir,
                 f"ids_{datetime.now().strftime('%y-%m-%d_%H%M%S')}.csv.zip",
@@ -153,18 +153,18 @@ class MusicGenreDatasetWithPreprocess(Dataset):
                 {
                     "lyrics": [" ".join(map(str, lyrics)) for lyrics in X.values],
                     "_lyrics": data["lyrics"].values,
-                    "playlist_genre": data["playlist_genre"].values,
-                    "playlist_genre_id": data["playlist_genre_id"].values,
                     **{
                         feature: data[feature].values for feature in self.audio_features
                     },
+                    "playlist_genre": data["playlist_genre"].values,
+                    "playlist_genre_id": data["playlist_genre_id"].values,
                 }
             )
             tmp.to_csv(path_processed, compression="zip")
         else:
-            X, y_label, y_id, y_audio = self._load_raw_data(data)
+            X, X_audio, y_label, y_id = self._load_raw_data(data)
 
-        return X, y_label, y_id, y_audio
+        return X, X_audio, y_label, y_id
 
     def _process_data(self, data: pd.DataFrame) -> tuple:
         if self.input_type == InputType.UNCLEAN:
@@ -185,9 +185,9 @@ class MusicGenreDatasetWithPreprocess(Dataset):
 
         return (
             X,
+            data[self.audio_features],
             data["playlist_genre"],
             data["playlist_genre_id"],
-            data[self.audio_features],
         )
 
     def _load_raw_data(self, data: pd.DataFrame) -> tuple:
@@ -201,9 +201,9 @@ class MusicGenreDatasetWithPreprocess(Dataset):
 
         return (
             X,
+            data[self.audio_features],
             data["playlist_genre"],
             data["playlist_genre_id"],
-            data[self.audio_features],
         )
 
     def _bert_w2v(self, tokens: list) -> list:
