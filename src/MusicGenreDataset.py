@@ -28,8 +28,7 @@ class MusicGenreDataset(Dataset):
             "valence",
             "tempo",
         ]
-
-        self.X, self.y_label, self.y_id, self.y_audio = self._load_data(path_data)
+        self.X, self.X_audio, self.y_label, self.y_id = self._load_data(path_data)
 
     def __len__(self) -> int:
         return len(self.X)
@@ -44,7 +43,7 @@ class MusicGenreDataset(Dataset):
         return (
             torch.tensor(item, dtype=torch.float32),
             torch.tensor(self.y_id[index], dtype=torch.int64),
-            torch.tensor(self.y_audio[index], dtype=torch.float32),
+            torch.tensor(self.X_audio[index], dtype=torch.float32),
         )
 
     def _load_data(self, path_data: str) -> pd.DataFrame:
@@ -52,13 +51,26 @@ class MusicGenreDataset(Dataset):
         X = [lyrics.split() for lyrics in data["lyrics"].values]
         return (
             X,
+            data[self.audio_features],
             data["playlist_genre"],
             data["playlist_genre_id"],
-            data[self.audio_features],
         )
 
 
 class MusicGenreDatasetWithPreprocess(Dataset):
+    AUDIO_FEATURES = [
+        "danceability",
+        "energy",
+        "key",
+        "loudness",
+        "speechiness",
+        "acousticness",
+        "instrumentalness",
+        "liveness",
+        "valence",
+        "tempo",
+    ]
+
     def __init__(
         self,
         path_data: str,
@@ -76,18 +88,6 @@ class MusicGenreDatasetWithPreprocess(Dataset):
         self.store_processed = store_processed
         self.output_dir = os.path.abspath(output_dir)
         self.nlp = spacy.load("en_core_web_sm", disable=["parser", "ner"])
-        self.audio_features = [
-            "danceability",
-            "energy",
-            "key",
-            "loudness",
-            "speechiness",
-            "acousticness",
-            "instrumentalness",
-            "liveness",
-            "valence",
-            "tempo",
-        ]
 
         if self.embedder_type == "bert":
             self.func_w2v = self._bert_w2v
@@ -96,7 +96,7 @@ class MusicGenreDatasetWithPreprocess(Dataset):
         else:
             raise ValueError(f"Unsupported embedder type: {self.embedder_type}")
 
-        self.X, self.y_label, self.y_id, self.y_audio = self._load_data(path_data)
+        self.X, self.X_audio, self.y_label, self.y_id = self._load_data(path_data)
 
     def __len__(self) -> int:
         return len(self.X)
@@ -115,7 +115,7 @@ class MusicGenreDatasetWithPreprocess(Dataset):
         return (
             torch.tensor(item, dtype=torch.float32),
             torch.tensor(self.y_id[index], dtype=torch.int64),
-            torch.tensor(self.y_audio[index], dtype=torch.float32),
+            torch.tensor(self.X_audio[index], dtype=torch.float32),
         )
 
     def _process_item(self, item) -> list:
@@ -137,24 +137,19 @@ class MusicGenreDatasetWithPreprocess(Dataset):
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
 
-        print(
-            f"Store processed data is activated. Saving processed data to {os.path.abspath(self.output_dir)} ..."
-        )
-
         if self.store_processed and self.input_type != InputType.INDEX:
             X, X_audio, y_label, y_id = self._process_data(data)
             path_processed = os.path.join(
                 self.output_dir,
                 f"ids_{datetime.now().strftime('%y-%m-%d_%H%M%S')}.csv.zip",
             )
-            print(f"Preprocessing done. Saving to {path_processed.split('/')[-1]} ...")
 
             tmp = pd.DataFrame(
                 {
                     "lyrics": [" ".join(map(str, lyrics)) for lyrics in X.values],
                     "_lyrics": data["lyrics"].values,
                     **{
-                        feature: data[feature].values for feature in self.audio_features
+                        feature: data[feature].values for feature in self.AUDIO_FEATURES
                     },
                     "playlist_genre": data["playlist_genre"].values,
                     "playlist_genre_id": data["playlist_genre_id"].values,
@@ -185,7 +180,7 @@ class MusicGenreDatasetWithPreprocess(Dataset):
 
         return (
             X,
-            data[self.audio_features],
+            data[self.AUDIO_FEATURES],
             data["playlist_genre"],
             data["playlist_genre_id"],
         )
@@ -201,7 +196,7 @@ class MusicGenreDatasetWithPreprocess(Dataset):
 
         return (
             X,
-            data[self.audio_features],
+            data[self.AUDIO_FEATURES],
             data["playlist_genre"],
             data["playlist_genre_id"],
         )
@@ -218,6 +213,16 @@ class MusicGenreDatasetWithPreprocess(Dataset):
 
     @staticmethod
     def preprocess(nlp, text: str) -> list:
+        """
+        Perform text preprocessing using spaCy.
+
+        Parameters:
+        - nlp (spacy.lang.en.English): SpaCy language model.
+        - text (str): Input text.
+
+        Returns:
+        - list: Processed list of tokens.
+        """
         doc = nlp(text)
         out = [
             token.lemma_.lower()
