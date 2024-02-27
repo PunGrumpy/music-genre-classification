@@ -32,12 +32,8 @@ class MusicGenreDataset(Dataset):
     def __init__(
         self,
         path_data: str,
-        embedder_model: any,
-        embedder_type: str,
         max_seq_length: int = 250,
     ):
-        self.embedder_model = embedder_model
-        self.embedder_type = embedder_type
         self.max_seq_length = max_seq_length
         self.X, self.X_audio, self.y_label, self.y_id = self._load_data(path_data)
 
@@ -49,33 +45,10 @@ class MusicGenreDataset(Dataset):
             yield self[index]
 
     def __getitem__(self, index) -> tuple:
-        item = self.X[index]
-
-        if self.embedder_type == "bert":
-            input = self.embedder_model.encode_plus(
-                item,
-                add_special_tokens=True,
-                max_length=self.max_seq_length,
-                pad_to_max_length=True,
-                return_attention_mask=True,
-                return_token_type_ids=True,
-            )
-            ids = input["input_ids"]
-            mask = input["attention_mask"]
-            token_type_ids = input["token_type_ids"]
-        elif self.embedder_type == "gensim":
-            ids = [int(word) for word in item.split()]
-            mask = np.ones(self.max_seq_length, dtype=np.int64)
-            token_type_ids = np.zeros(self.max_seq_length, dtype=np.int64)
-        else:
-            raise ValueError(f"Unsupported embedder type: {self.embedder_type}")
-
         return (
-            torch.tensor(ids, dtype=torch.int64),
-            torch.tensor(mask, dtype=torch.int64),
-            torch.tensor(token_type_ids, dtype=torch.int64),
-            torch.tensor(self.y_id[index], dtype=torch.int64),
+            torch.tensor(self.X[index], dtype=torch.int64),
             torch.tensor(self.X_audio[index], dtype=torch.float32),
+            torch.tensor(self.y_id[index], dtype=torch.int64),
         )
 
     def _load_data(self, path_data: str) -> pd.DataFrame:
@@ -84,10 +57,7 @@ class MusicGenreDataset(Dataset):
         return X, X_audio, y_label, y_id
 
     def _load_raw_data(self, data: pd.DataFrame) -> tuple:
-        if self.embedder_type == "gensim":
-            X = [lyrics.split() for lyrics in data["lyrics"].values]
-        else:
-            X = data["lyrics"].values
+        X = data["lyrics"].values
         return (
             X,
             data[AUDIO_FEATURES],
@@ -132,33 +102,33 @@ class MusicGenreDatasetWithPreprocess(Dataset):
             yield self[index]
 
     def __getitem__(self, index) -> tuple:
-        item = self.X[index]
+        item_text = self.X[index]
 
         if self.embedder_type == "bert":
-            input = self.embedder_model.encode_plus(
-                item,
+            input_text = self.embedder_model.encode_plus(
+                item_text,
                 add_special_tokens=True,
                 max_length=self.max_seq_length,
                 pad_to_max_length=True,
                 return_attention_mask=True,
                 return_token_type_ids=True,
             )
-            ids = input["input_ids"]
-            mask = input["attention_mask"]
-            token_type_ids = input["token_type_ids"]
+            ids_text = input_text["input_ids"]
+            mask_text = input_text["attention_mask"]
+            token_type_ids_text = input_text["token_type_ids"]
         elif self.embedder_type == "gensim":
-            ids = [int(word) for word in item.split()]
-            mask = np.ones(self.max_seq_length, dtype=np.int64)
-            token_type_ids = np.zeros(self.max_seq_length, dtype=np.int64)
+            ids_text = [int(word) for word in item_text.split()]
+            mask_text = np.ones(self.max_seq_length, dtype=np.int64)
+            token_type_ids_text = np.zeros(self.max_seq_length, dtype=np.int64)
         else:
             raise ValueError(f"Unsupported embedder type: {self.embedder_type}")
 
         return (
-            torch.tensor(ids, dtype=torch.int64),
-            torch.tensor(mask, dtype=torch.int64),
-            torch.tensor(token_type_ids, dtype=torch.int64),
-            torch.tensor(self.y_id[index], dtype=torch.int64),
+            torch.tensor(ids_text, dtype=torch.int64),
+            torch.tensor(mask_text, dtype=torch.int64),
+            torch.tensor(token_type_ids_text, dtype=torch.int64),
             torch.tensor(self.X_audio[index], dtype=torch.float32),
+            torch.tensor(self.y_id[index], dtype=torch.int64),
         )
 
     def _process_item(self, item) -> list:
