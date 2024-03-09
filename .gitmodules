@@ -1,0 +1,3 @@
+[submodule "demo-application"]
+	path = demo-application
+	url = git@hf.co:spaces/PunGrumpy/music-genre-classification
