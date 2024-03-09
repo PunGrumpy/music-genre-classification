@@ -53,8 +53,6 @@ class LyricsAudioModelInference:
 
         logits = self.classifier(input_features)
         probs = F.softmax(logits, dim=1)
-        print(logits)
-        print(probs)
 
         top3_genres = torch.topk(probs, k=3, dim=1)
         result = {}
@@ -127,4 +125,4 @@ if __name__ == "__main__":
         ],
     )
 
-    iface.launch(debug=True)
+    iface.launch(debug=True, show_api=True, share=True, inline=True)
